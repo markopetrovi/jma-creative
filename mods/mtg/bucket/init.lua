@@ -4,6 +4,7 @@
 -- Load support for MT game translation.
 local S = minetest.get_translator("bucket")
 
+local required_playtime = 4 * 3600
 
 minetest.register_alias("bucket", "bucket:bucket_empty")
 minetest.register_alias("bucket_water", "bucket:bucket_water")
@@ -101,8 +102,13 @@ function bucket.register_liquid(source, flowing, itemname, inventory_image, name
 					end
 				end
 
+				local player_name = user:get_player_name()
+				if not antigrief.is_playtime_passed(player_name, required_playtime) then
+					return
+				end
+
 				if check_protection(lpos, user
-						and user:get_player_name()
+						and player_name
 						or "", "place "..source) then
 					return
 				end
