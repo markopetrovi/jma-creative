@@ -1,13 +1,113 @@
+minetest.log("Loading msg_color...")
+
+local storage = minetest.get_mod_storage()
+
+local roles = {"[Admin]", "[Moderator]", "[Guardian]"}
 local colors = {"#E4FF00", "#17FF00", "#06E5CE", "#0617E5", "#005A28"}
 local i = 0
-local moderators = {"milicap", "Teaa"}
-local builders = {"JR25"}
+
+for _, role in ipairs(roles) do
+	if not storage:get_string(role.."_color") then
+		storage:set_string(role.."_color", "#FFFFFF")
+	end
+	if not storage:get_string(role.."_color") then
+		storage:set_string(role.."_namecolor", "#FFFFFF")
+	end
+end
+
+local function has_value(tab, val)
+    for _, value in ipairs(tab) do
+        if value == val then
+            return true
+        end
+    end
+
+    return false
+end
+
+player_colors = {}
+
+minetest.register_chatcommand("msg_color", {
+	description = "Manage chat tags and name colors",
+	params = "<command> <command_args>",
+	privs = { server=true },
+	func = function(name, param)
+		local iter = param:gmatch("%S+")
+		local command = iter()
+
+		if command == "help" then
+			minetest.chat_send_player(name, "List of possible commands:")
+			minetest.chat_send_player(name, "listtag: Lists the available tags")
+			minetest.chat_send_player(name, "settag <name> <tag>: Sets the user's tag")
+			minetest.chat_send_player(name, "tagcolor <tag> <color>: Sets the tag's color")
+			minetest.chat_send_player(name, "namecolor <tag> <color>: Sets the name color for users with the tag")
+			return true
+		elseif command == "listtag" then
+			minetest.chat_send_player(name, "List of available tags:")
+			for _, role in ipairs(roles) do
+				minetest.chat_send_player(name, role..": "..minetest.colorize(storage:get_string(role.."_color"), role).." "..minetest.colorize(storage:get_string(role.."_namecolor"), "<Username>"))
+			end
+			return true
+		elseif command == "settag" then
+			local pname = iter()
+			if pname == "" then
+				return false, "Please provide a player name"
+			else
+				local cmdname = iter()
+				if has_value(roles, cmdname) then
+					storage:set_string(pname.."_role", cmdname)
+					return true, "Added tag "..cmdname.." to "..pname
+				else
+					return false, "Tag not found"
+				end
+			end
+		elseif command == "tagcolor" then
+			local tag = iter()
+			if tag == "" then
+				return false, "Please provide a tag"
+			else
+				if has_value(roles, tag) then
+					local color = iter()
+					if color == "" then
+						return false, "Please provide a color"
+					else
+						storage:set_string(tag.."_color", color)
+						return true, "Set tag "..tag.." color to "..minetest.colorize(color, color)
+					end
+				else
+					return false, "Tag not found"
+				end
+			end
+		elseif command == "namecolor" then
+			local tag = iter()
+			if tag == "" then
+				return false, "Please provide a tag"
+			else
+				if has_value(roles, tag) then
+					local color = iter()
+					if color == "" then
+						return false, "Please provide a color"
+					else
+						storage:set_string(tag.."_namecolor", color)
+						return true, "Set tag "..tag.." name color to "..minetest.colorize(color, color)
+					end
+				else
+					return false, "Tag not found"
+				end
+			end
+		else
+			return false, "Please provide an argument. View all arguments with /msg_color help"
+		end
+	end
+})
 
 local function get_color(name)
-	local player = minetest.get_player_by_name(name)
-	local pmeta = player:get_meta()
-	local color = pmeta:get_string("msg_color:color")
-	return color
+	local role = storage:get_string(name.."_role")
+	if role then
+		return storage:get_string(role.."_namecolor")
+	else
+		return player_colors[name]
+	end
 end
 
 local function isStringInList(target, stringList)
@@ -21,49 +121,30 @@ end
 
 minetest.register_on_joinplayer(
 	function(player)
-		local pmeta = player:get_meta()
-		-- Players with roles don't get random colors
-		if player:get_player_name() == "mpplayer" then
-			pmeta:set_string("msg_color:color", "#AD0000")
-			return
+		local name = player:get_player_name()
+		local role = storage:get_string(name.."_role")
+		if storage:get_string(name.."_role") then
+			player_colors[name] = storage:get_string(role.."_namecolor")
+			return true
 		end
-		if player:get_player_name() == "milicap" then
-			pmeta:set_string("msg_color:color", "#EE8500")
-			return
-		end
-		if player:get_player_name() == "Teaa" then
-			pmeta:set_string("msg_color:color", "#FF00F7")
-			return
-		end
-		if player:get_player_name() == "JR25" then
-			pmeta:set_string("msg_color:color", "#1900EF")
-			return
-		end
+
 		-- Continue for normal players
 		i = i + 1
 		if i > 5 then
 			i = 1
 		end
 		
-		pmeta:set_string("msg_color:color", colors[i])
+		player_colors[player:get_player_name()] = colors[i]
 	end
 )
 
 minetest.register_on_chat_message(
-	function(name, msg)
-		-- Handle admin
-		if name == "mpplayer" then
-			minetest.chat_send_all(minetest.colorize("#FF0000", "[Admin]") .. minetest.colorize("#AD0000", " <mpplayer> ") .. msg)
-			return true
-		end
-		
+	function(name, msg)		
 		local color = get_color(name)
 		local tag = ""
-		if isStringInList(name, moderators) then
-			tag = minetest.colorize("#13FF00", "[Moderator]")
-		end
-		if isStringInList(name, builders) then
-			tag = minetest.colorize("#0DCC00", "[Builder]")
+		local role = storage:get_string(name.."_role")
+		if role then
+			tag = minetest.colorize(storage:get_string(role.."_color"), role).." "
 		end
 				
 		minetest.chat_send_all(tag .. minetest.colorize(color, '<' .. name .. '> ') .. msg)
@@ -71,3 +152,7 @@ minetest.register_on_chat_message(
 	end
 )
 
+for _, role in ipairs(roles) do
+	minetest.log("Loaded role "..role)
+end
+minetest.log("Finished loading msg_color")
